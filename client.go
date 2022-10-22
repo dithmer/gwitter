@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 type Endpoint string
@@ -18,7 +20,7 @@ const (
 )
 
 type Client struct {
-	httpClient *http.Client
+	HttpClient *http.Client
 	URL        string
 	Token      string
 }
@@ -29,7 +31,7 @@ func NewDefaultClient(apiKey string, apiKeySecret string) (*Client, error) {
 
 func NewClient(url string, hc *http.Client, apiKey string, apiKeySecret string) (*Client, error) {
 	client := &Client{
-		httpClient: hc,
+		HttpClient: hc,
 		Token:      "",
 		URL:        url,
 	}
@@ -40,6 +42,29 @@ func NewClient(url string, hc *http.Client, apiKey string, apiKeySecret string) 
 	}
 
 	return client, nil
+}
+
+func (c *Client) DoAuthenticatedRequest(r *http.Request) (*http.Response, error) {
+	handleError := func(err error) (*http.Response, error) {
+		return nil, errors.Wrap(err, "failed to do authenticated request")
+	}
+
+	if c.Token == "" {
+		return handleError(fmt.Errorf("token is empty"))
+	}
+
+	r.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))
+
+	resp, err := c.HttpClient.Do(r)
+	if err != nil {
+		return handleError(err)
+	}
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return handleError(errors.New(resp.Status))
+	}
+
+	return resp, nil
 }
 
 func (c *Client) authenticate(apiKey string, apiKeySecret string) error {
@@ -58,7 +83,7 @@ func (c *Client) authenticate(apiKey string, apiKeySecret string) error {
 	req.SetBasicAuth(apiKey, apiKeySecret)
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
