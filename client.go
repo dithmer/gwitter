@@ -12,19 +12,26 @@ import (
 type Endpoint string
 
 const (
-	URL string = "https://api.twitter.com"
+	DefaultURL = "https://api.twitter.com"
 
 	GetBearerToken Endpoint = "/oauth2/token" //nolint: gosec
 )
 
 type Client struct {
 	httpClient *http.Client
+	URL        string
 	Token      string
 }
 
-func NewClient(httpClient *http.Client, apiKey string, apiKeySecret string) (*Client, error) {
+func NewDefaultClient(apiKey string, apiKeySecret string) (*Client, error) {
+	return NewClient(DefaultURL, http.DefaultClient, apiKey, apiKeySecret)
+}
+
+func NewClient(url string, hc *http.Client, apiKey string, apiKeySecret string) (*Client, error) {
 	client := &Client{
-		httpClient: httpClient,
+		httpClient: hc,
+		Token:      "",
+		URL:        url,
 	}
 
 	err := client.authenticate(apiKey, apiKeySecret)
@@ -41,7 +48,7 @@ func (c *Client) authenticate(apiKey string, apiKeySecret string) error {
 	req, err := http.NewRequestWithContext(
 		context.TODO(),
 		http.MethodPost,
-		buildURL(GetBearerToken),
+		buildURL(c.URL, GetBearerToken),
 		strings.NewReader(values.Encode()),
 	)
 	if err != nil {
@@ -73,6 +80,6 @@ func (c *Client) authenticate(apiKey string, apiKeySecret string) error {
 	return nil
 }
 
-func buildURL(endpoint Endpoint) string {
-	return fmt.Sprintf("%s%s", URL, endpoint)
+func buildURL(baseURL string, endpoint Endpoint) string {
+	return fmt.Sprintf("%s%s", baseURL, endpoint)
 }
